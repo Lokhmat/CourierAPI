@@ -24,21 +24,61 @@ class CourierSerializer(serializers.ModelSerializer):
         return Courier.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
-        pass
+        """
+        Updates info about courier
+        """
+        # TODO: recast orders according to new Info  
+        instance.courier_type = self.initial_data.get('courier_type', instance.courier_type)
+        instance.regions = self.initial_data.get('regions', instance.regions)
+        instance.working_hours = self.initial_data.get('working_hours', instance.working_hours)
+        instance.save()
+        return instance
 
     def is_valid(self, raise_exception=True):
         """
         Validating of input data
         """
-        super(CourierSerializer, self).is_valid(raise_exception=True)
+
+        # If we want just update model we call cascade of validate_<type>
+        if self.partial:
+            self.check_fields(['courier_type', 'regions', 'working_hours'])
+            super(CourierSerializer, self).is_valid(raise_exception=True)
+            return True
+        self.check_fields(['courier_type', 'courier_id', 'regions', 'working_hours'])
         if self.initial_data['courier_id'] <= 0:
             raise ValidationError('Courier id is less that 0')
         if self.initial_data['courier_type'] not in ['foot', 'bike', 'car']:
             raise ValidationError('Courier type is not in a correct format')
+        for key in ['courier_id', 'courier_type', 'regions', 'working_hours']:
+            if key not in self.initial_data.keys():
+                raise ValidationError('{0} property is missed'.format(key))
         for region in self.initial_data['regions']:
             if region <= 0:
                 raise ValidationError('One of regions is less that 0')
         for element in self.initial_data['working_hours']:
+            if not (len(element.split('-')) == 2 and is_correct_time(element.split('-')[0]) and is_correct_time(
+                    element.split('-')[1])):
+                raise ValidationError('One of working hours is not in a correct format')
+        return True
+
+    def check_fields(self, appropriate_field):
+        for key in self.initial_data.keys():
+            if key not in appropriate_field:
+                raise ValidationError('Couriers should not have {0} property '.format(key))
+
+    def validate_regions(self, regions):
+        for region in regions:
+            if region <= 0:
+                raise ValidationError('One of regions is less that 0')
+        return True
+
+    def validate_courier_type(self, courier_type):
+        if courier_type not in ['foot', 'bike', 'car']:
+            raise ValidationError('Courier type is not in a correct format')
+        return True
+
+    def validate_working_hours(self, working_hours):
+        for element in working_hours:
             if not (len(element.split('-')) == 2 and is_correct_time(element.split('-')[0]) and is_correct_time(
                     element.split('-')[1])):
                 raise ValidationError('One of working hours is not in a correct format')

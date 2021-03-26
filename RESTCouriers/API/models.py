@@ -5,8 +5,8 @@ from django.contrib.postgres.fields import ArrayField
 class Courier(models.Model):
     courier_id = models.IntegerField(primary_key=True, unique=True)
     courier_type = models.CharField('Type of courier', max_length=4)
-    regions = ArrayField(models.IntegerField(), null=True, blank=True, default=list)
-    working_hours = ArrayField(models.CharField(max_length=11), null=True, blank=True, default=list)
+    regions = ArrayField(models.IntegerField(), blank=True, default=list)
+    working_hours = ArrayField(models.CharField(max_length=11), blank=True, default=list)
 
 
 class Order(models.Model):
