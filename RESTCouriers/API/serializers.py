@@ -21,6 +21,7 @@ class CourierSerializer(serializers.ModelSerializer):
         fields = ['courier_id', 'courier_type', 'regions', 'working_hours']
 
     def create(self, validated_data):
+        print(str(validated_data))
         return Courier.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
@@ -28,9 +29,9 @@ class CourierSerializer(serializers.ModelSerializer):
         Updates info about courier
         """
         # TODO: recast orders according to new Info
-        instance.courier_type = self.initial_data.get('courier_type', instance.courier_type)
-        instance.regions = self.initial_data.get('regions', instance.regions)
-        instance.working_hours = self.initial_data.get('working_hours', instance.working_hours)
+        instance.courier_type = self.validated_data.get('courier_type', instance.courier_type)
+        instance.regions = self.validated_data.get('regions', instance.regions)
+        instance.working_hours = self.validated_data.get('working_hours', instance.working_hours)
         instance.save()
         return instance
 
@@ -74,19 +75,19 @@ class CourierSerializer(serializers.ModelSerializer):
         for region in regions:
             if region <= 0:
                 raise ValidationError('One of regions is less that 0')
-        return True
+        return regions
 
     def validate_courier_type(self, courier_type):
         if courier_type not in ['foot', 'bike', 'car']:
             raise ValidationError('Courier type is not in a correct format')
-        return True
+        return courier_type
 
     def validate_working_hours(self, working_hours):
         for element in working_hours:
             if not (len(element.split('-')) == 2 and is_correct_time(element.split('-')[0]) and is_correct_time(
                     element.split('-')[1])):
                 raise ValidationError('One of working hours is not in a correct format')
-        return True
+        return working_hours
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -113,8 +114,9 @@ class OrderSerializer(serializers.ModelSerializer):
         self.check_fields(['weight', 'order_id', 'region', 'delivery_hours'])
         if self.initial_data['order_id'] <= 0:
             raise ValidationError('Order id is less that 0')
-        if not 0.01 <= self.initial_data['weight'] <= 50:
-            raise ValidationError('Weight is not in a correct number gap(from 0.01 to 50)')
+        if not 0.01 <= self.initial_data['weight'] <= 50 or not self.correct_integer(str(self.validated_data['weight'])):
+            raise ValidationError(
+                'Weight is not in a correct number gap(from 0.01 to 50) and only two digits after point')
         for key in ['weight', 'order_id', 'region', 'delivery_hours']:
             if key not in self.initial_data.keys():
                 raise ValidationError('{0} property is missed'.format(key))
@@ -133,3 +135,11 @@ class OrderSerializer(serializers.ModelSerializer):
         for key in self.initial_data.keys():
             if key not in appropriate_field:
                 raise ValidationError('Order should not have {0} property '.format(key))
+
+    def correct_integer(self, data):
+        numb = data.split('.')
+        if len(numb) != 1 and len(numb) != 2:
+            return False
+        if len(numb[1]) > 2:
+            return False
+        return True

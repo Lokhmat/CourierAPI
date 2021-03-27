@@ -12,7 +12,7 @@ class Courier(models.Model):
 class Order(models.Model):
     order_id = models.IntegerField(primary_key=True, unique=True)
     done = models.BooleanField('Is order done already', default=False)
-    weight = models.DecimalField('Weight of package', max_digits=2, decimal_places=2)
+    weight = models.FloatField('Weight of package')
     region = models.IntegerField('Region of order')
     delivery_hours = ArrayField(models.CharField(max_length=11))
     assign_time = models.DateTimeField('Time of assignment', null=True)
