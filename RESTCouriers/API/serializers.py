@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
-from .models import Courier
+from .models import Courier, Order
 import time
 
 
@@ -27,7 +27,7 @@ class CourierSerializer(serializers.ModelSerializer):
         """
         Updates info about courier
         """
-        # TODO: recast orders according to new Info  
+        # TODO: recast orders according to new Info
         instance.courier_type = self.initial_data.get('courier_type', instance.courier_type)
         instance.regions = self.initial_data.get('regions', instance.regions)
         instance.working_hours = self.initial_data.get('working_hours', instance.working_hours)
@@ -44,6 +44,7 @@ class CourierSerializer(serializers.ModelSerializer):
             self.check_fields(['courier_type', 'regions', 'working_hours'])
             super(CourierSerializer, self).is_valid(raise_exception=True)
             return True
+        super(CourierSerializer, self).is_valid(raise_exception=True)
         self.check_fields(['courier_type', 'courier_id', 'regions', 'working_hours'])
         if self.initial_data['courier_id'] <= 0:
             raise ValidationError('Courier id is less that 0')
@@ -62,6 +63,9 @@ class CourierSerializer(serializers.ModelSerializer):
         return True
 
     def check_fields(self, appropriate_field):
+        """
+        Check if all fields in initial data are appropriate
+        """
         for key in self.initial_data.keys():
             if key not in appropriate_field:
                 raise ValidationError('Couriers should not have {0} property '.format(key))
@@ -83,3 +87,49 @@ class CourierSerializer(serializers.ModelSerializer):
                     element.split('-')[1])):
                 raise ValidationError('One of working hours is not in a correct format')
         return True
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Order
+        fields = ['order_id', 'weight', 'region', 'delivery_hours']
+
+    def create(self, validated_data):
+        return Order.objects.create(**validated_data)
+
+    def is_valid(self, raise_exception=True):
+        """
+        Validating of input data
+        """
+
+        # TODO: update order field assigned_to
+        """
+        if self.partial:
+            self.check_fields(['courier_type', 'regions', 'working_hours'])
+            super(CourierSerializer, self).is_valid(raise_exception=True)
+            return True
+            """
+        super(OrderSerializer, self).is_valid(raise_exception=True)
+        self.check_fields(['weight', 'order_id', 'region', 'delivery_hours'])
+        if self.initial_data['order_id'] <= 0:
+            raise ValidationError('Order id is less that 0')
+        if not 0.01 <= self.initial_data['weight'] <= 50:
+            raise ValidationError('Weight is not in a correct number gap(from 0.01 to 50)')
+        for key in ['weight', 'order_id', 'region', 'delivery_hours']:
+            if key not in self.initial_data.keys():
+                raise ValidationError('{0} property is missed'.format(key))
+        if self.initial_data['region'] <= 0:
+            raise ValidationError('Region is less that 0')
+        for element in self.initial_data['delivery_hours']:
+            if not (len(element.split('-')) == 2 and is_correct_time(element.split('-')[0]) and is_correct_time(
+                    element.split('-')[1])):
+                raise ValidationError('One of working hours is not in a correct format')
+        return True
+
+    def check_fields(self, appropriate_field):
+        """
+        Check if all fields in initial data are appropriate
+        """
+        for key in self.initial_data.keys():
+            if key not in appropriate_field:
+                raise ValidationError('Order should not have {0} property '.format(key))

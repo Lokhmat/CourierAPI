@@ -11,10 +11,10 @@ class Courier(models.Model):
 
 class Order(models.Model):
     order_id = models.IntegerField(primary_key=True, unique=True)
-    done = models.BooleanField('Is order done already')
+    done = models.BooleanField('Is order done already', default=False)
     weight = models.DecimalField('Weight of package', max_digits=2, decimal_places=2)
     region = models.IntegerField('Region of order')
     delivery_hours = ArrayField(models.CharField(max_length=11))
     assign_time = models.DateTimeField('Time of assignment', null=True)
     complete_time = models.DateTimeField('Time of completion', null=True)
-    assigned_to = models.ForeignKey(Courier, on_delete=models.CASCADE)
+    assigned_to = models.ForeignKey(Courier, on_delete=models.CASCADE, null=True)
