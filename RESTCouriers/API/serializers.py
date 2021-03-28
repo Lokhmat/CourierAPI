@@ -2,6 +2,8 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from .models import Courier, Order
 import time
+from dateutil.tz import UTC
+import datetime
 
 
 def is_correct_time(time_str):
@@ -29,10 +31,30 @@ class CourierSerializer(serializers.ModelSerializer):
         Updates info about courier
         """
         # TODO: recast orders according to new Info
+        types = {'foot': 10, 'bike': 15, 'car': 50}
+        old_type = instance.courier_type
         instance.courier_type = self.validated_data.get('courier_type', instance.courier_type)
         instance.regions = self.validated_data.get('regions', instance.regions)
         instance.working_hours = self.validated_data.get('working_hours', instance.working_hours)
         instance.save()
+        for order in Order.objects.filter(done=False).filter(assigned_to=instance):
+            if order.region not in instance.regions:
+                order.assign_time = None
+                order.assigned_to = None
+                order.save()
+            elif not any(
+                    CourierSerializer.hours_intersect(delivery_gap, instance.working_hours) for delivery_gap in
+                    order.delivery_hours):
+                order.assign_time = None
+                order.assigned_to = None
+                order.save()
+            elif types[old_type] > types[instance.courier_type]:
+                while types[instance.courier_type] - sum(
+                        order.weight for order in Order.objects.filter(assigned_to=instance)) < 0:
+                    order = Order.objects.filter(assigned_to=instance).order_by('weight')[0]
+                    order.assign_time = None
+                    order.assigned_to = None
+                    order.save()
         return instance
 
     def is_valid(self, raise_exception=True):
@@ -89,11 +111,27 @@ class CourierSerializer(serializers.ModelSerializer):
                 raise ValidationError('One of working hours is not in a correct format')
         return working_hours
 
+    @staticmethod
+    def hours_intersect(delivery_gap, working_hours):
+        """
+        Here we check if delivery gap of customer intersects with working hours of courier so he could deliver it
+        """
+        for working_gap in working_hours:
+            start_is_earlier = datetime.datetime.strptime(working_gap.split('-')[0],
+                                                          '%H:%M') <= datetime.datetime.strptime(
+                delivery_gap.split('-')[0], '%H:%M')
+            finish_is_later = datetime.datetime.strptime(working_gap.split('-')[1],
+                                                         '%H:%M') >= datetime.datetime.strptime(
+                delivery_gap.split('-')[1], '%H:%M')
+            if start_is_earlier or finish_is_later:
+                return True
+        return False
+
 
 class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
-        fields = ['order_id', 'weight', 'region', 'delivery_hours']
+        fields = ['order_id', 'weight', 'region', 'delivery_hours', 'done', 'complete_time']
 
     def create(self, validated_data):
         return Order.objects.create(**validated_data)
@@ -102,22 +140,16 @@ class OrderSerializer(serializers.ModelSerializer):
         """
         Updates info about courier
         """
-        # TODO: recast orders according to new Info
-        """
-        instance.courier_type = self.validated_data.get('courier_type', instance.courier_type)
-        instance.regions = self.validated_data.get('regions', instance.regions)
-        instance.working_hours = self.validated_data.get('working_hours', instance.working_hours)
-        instance.save()
-        """
+        if not instance.done:
+            instance.complete_time = validated_data.get('complete_time').astimezone(UTC)
+            instance.done = True
+            instance.save()
         return instance
 
     def is_valid(self, raise_exception=True):
         """
         Validating of input data
         """
-
-        # TODO: update order field assigned_to
-
         if self.partial and len(self.initial_data) == 3:
             self.check_fields(['courier_id', 'order_id', 'complete_time'])
             super(OrderSerializer, self).is_valid(raise_exception=True)
@@ -127,7 +159,7 @@ class OrderSerializer(serializers.ModelSerializer):
         self.check_fields(['weight', 'order_id', 'region', 'delivery_hours'])
         if self.initial_data['order_id'] <= 0:
             raise ValidationError('Order id is less that 0')
-        if not 0.01 <= self.initial_data['weight'] <= 50 or not self.correct_integer(
+        if not 0.01 <= self.initial_data['weight'] <= 50 or not self.correct_number(
                 str(self.validated_data['weight'])):
             raise ValidationError(
                 'Weight is not in a correct number gap(from 0.01 to 50) and only two digits after point')
@@ -142,9 +174,6 @@ class OrderSerializer(serializers.ModelSerializer):
                 raise ValidationError('One of working hours is not in a correct format')
         return True
 
-    def validate_complete_time(self,time):
-        return time
-
     def check_fields(self, appropriate_field):
         """
         Check if all fields in initial data are appropriate
@@ -153,7 +182,7 @@ class OrderSerializer(serializers.ModelSerializer):
             if key not in appropriate_field:
                 raise ValidationError('Order should not have {0} property '.format(key))
 
-    def correct_integer(self, data):
+    def correct_number(self, data):
         numb = data.split('.')
         if len(numb) != 1 and len(numb) != 2:
             return False
