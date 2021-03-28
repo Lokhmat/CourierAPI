@@ -237,7 +237,6 @@ def see_courier(courier_id):
                     sum_sec += (orders[i].complete_time - orders[i - 1].complete_time).total_seconds()
             time_by_reg.append(sum_sec / len(orders))
     t = min(time_by_reg)
-    print(t)
     answer = {
         "courier_id": courier.courier_id,
         "courier_type": courier.courier_type,

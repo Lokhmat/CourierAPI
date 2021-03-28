@@ -116,13 +116,13 @@ class CourierSerializer(serializers.ModelSerializer):
         Here we check if delivery gap of customer intersects with working hours of courier so he could deliver it
         """
         for working_gap in working_hours:
-            start_is_earlier = datetime.datetime.strptime(working_gap.split('-')[0],
-                                                          '%H:%M') <= datetime.datetime.strptime(
-                delivery_gap.split('-')[0], '%H:%M')
             finish_is_later = datetime.datetime.strptime(working_gap.split('-')[1],
                                                          '%H:%M') >= datetime.datetime.strptime(
+                delivery_gap.split('-')[0], '%H:%M')
+            start_is_earlier = datetime.datetime.strptime(working_gap.split('-')[0],
+                                                          '%H:%M') <= datetime.datetime.strptime(
                 delivery_gap.split('-')[1], '%H:%M')
-            if start_is_earlier or finish_is_later:
+            if start_is_earlier and finish_is_later:
                 return True
         return False
 
@@ -144,7 +144,7 @@ class OrderSerializer(serializers.ModelSerializer):
             instance.complete_time = validated_data.get('complete_time').astimezone(UTC)
             instance.done = True
             courier = instance.assigned_to
-            courier.earnings += 500*types[courier.courier_type]
+            courier.earnings += 500 * types[courier.courier_type]
             courier.save()
             instance.save()
         return instance
