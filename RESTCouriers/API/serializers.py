@@ -23,20 +23,19 @@ class CourierSerializer(serializers.ModelSerializer):
         fields = ['courier_id', 'courier_type', 'regions', 'working_hours']
 
     def create(self, validated_data):
-        print(str(validated_data))
         return Courier.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
         """
         Updates info about courier
         """
-        # TODO: recast orders according to new Info
         types = {'foot': 10, 'bike': 15, 'car': 50}
         old_type = instance.courier_type
         instance.courier_type = self.validated_data.get('courier_type', instance.courier_type)
         instance.regions = self.validated_data.get('regions', instance.regions)
         instance.working_hours = self.validated_data.get('working_hours', instance.working_hours)
         instance.save()
+        # Recasting orders if new info
         for order in Order.objects.filter(done=False).filter(assigned_to=instance):
             if order.region not in instance.regions:
                 order.assign_time = None
@@ -140,9 +139,13 @@ class OrderSerializer(serializers.ModelSerializer):
         """
         Updates info about courier
         """
+        types = {'foot': 2, 'bike': 5, 'car': 9}
         if not instance.done:
             instance.complete_time = validated_data.get('complete_time').astimezone(UTC)
             instance.done = True
+            courier = instance.assigned_to
+            courier.earnings += 500*types[courier.courier_type]
+            courier.save()
             instance.save()
         return instance
 

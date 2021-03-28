@@ -1,10 +1,9 @@
-from django.http import JsonResponse, HttpResponseBadRequest
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponseNotFound
 from rest_framework.parsers import JSONParser, ParseError
 from .serializers import CourierSerializer, OrderSerializer
 from .models import Courier, Order
 from rest_framework.exceptions import ValidationError
 from django.utils import timezone
-import datetime
 from dateutil.parser import isoparse
 from dateutil.tz import UTC
 
@@ -42,6 +41,8 @@ def update_couriers(request, courier_id):
     """
     Update info about couriers
     """
+    if request.method == 'GET':
+        return see_courier(courier_id)
     if request.method == 'PATCH' and request.body is not None:
         try:
             json = JSONParser().parse(request)
@@ -121,9 +122,10 @@ def validated_assign_couriers(json):
         if any(CourierSerializer.hours_intersect(delivery_gap, courier.working_hours) for delivery_gap in
                order.delivery_hours):
             suitable_orders.append(order)
-    current_payload = sum(order.weight for order in Order.objects.filter(assigned_to=courier))
+    current_payload = sum(order.weight for order in Order.objects.filter(assigned_to=courier).filter(done=False))
     # Here we should pack backpack like in knapsack problem however the dynamic programming method here will not
-    # work cause it works only with integer weights so in order not to have exponential time of algorithm
+    # work cause it works only with integer weights so in order not to have exponential
+    # time of algorithm(packing by brute force)
     # let's pack it just by Greedy algo
     answer = {
         'orders': [],
@@ -151,7 +153,7 @@ def validated_assign_couriers(json):
 
 def knapsack(space, items):
     """
-    Probably we could scale algo to work with float by multiplication by 100 every number. But right now i didn't figure
+    Probably we could scale algo to work with float by multiplication by 100 every number. But right now i can't figure
     out how
     """
     w = [item.weight for item in items]
@@ -179,6 +181,9 @@ def knapsack(space, items):
 
 
 def complete_order(request):
+    """
+    Mark order as completed
+    """
     if request.method == 'POST' and request.body is not None:
         try:
             json = JSONParser().parse(request)
@@ -204,3 +209,41 @@ def complete_order(request):
         except ValidationError as error:
             return HttpResponseBadRequest(error.detail)
     return HttpResponseBadRequest('should be POST request with body')
+
+
+def see_courier(courier_id):
+    if len(Courier.objects.filter(courier_id=courier_id)) == 0:
+        return HttpResponseNotFound('Not found')
+    courier = Courier.objects.filter(courier_id=courier_id)[0]
+    if len(Order.objects.filter(assigned_to=courier).filter(done=True)) == 0:
+        answer = {
+            "courier_id": courier.courier_id,
+            "courier_type": courier.courier_type,
+            "regions": courier.regions,
+            "working_hours": courier.working_hours,
+            "earnings": courier.earnings
+        }
+        return JsonResponse(answer, status=200)
+    time_by_reg = []
+    for region in courier.regions:
+        orders = Order.objects.filter(region=region).filter(done=True).filter(assigned_to=courier).order_by(
+            'complete_time')
+        if len(orders) != 0:
+            sum_sec = 0
+            for i in range(len(orders)):
+                if i == 0:
+                    sum_sec += (orders[i].complete_time - orders[i].assign_time).total_seconds()
+                else:
+                    sum_sec += (orders[i].complete_time - orders[i - 1].complete_time).total_seconds()
+            time_by_reg.append(sum_sec / len(orders))
+    t = min(time_by_reg)
+    print(t)
+    answer = {
+        "courier_id": courier.courier_id,
+        "courier_type": courier.courier_type,
+        "regions": courier.regions,
+        "working_hours": courier.working_hours,
+        "rating": round((60 * 60 - min(t, 60 * 60)) / (60 * 60) * 5, 2),
+        "earnings": courier.earnings
+    }
+    return JsonResponse(answer, status=200)

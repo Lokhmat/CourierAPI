@@ -7,6 +7,7 @@ class Courier(models.Model):
     courier_type = models.CharField('Type of courier', max_length=4)
     regions = ArrayField(models.IntegerField(), blank=True, default=list)
     working_hours = ArrayField(models.CharField(max_length=11), blank=True, default=list)
+    earnings = models.IntegerField('Earnings of a courier', default=0)
 
 
 class Order(models.Model):
