@@ -98,23 +98,37 @@ class OrderSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         return Order.objects.create(**validated_data)
 
+    def update(self, instance, validated_data):
+        """
+        Updates info about courier
+        """
+        # TODO: recast orders according to new Info
+        """
+        instance.courier_type = self.validated_data.get('courier_type', instance.courier_type)
+        instance.regions = self.validated_data.get('regions', instance.regions)
+        instance.working_hours = self.validated_data.get('working_hours', instance.working_hours)
+        instance.save()
+        """
+        return instance
+
     def is_valid(self, raise_exception=True):
         """
         Validating of input data
         """
 
         # TODO: update order field assigned_to
-        """
-        if self.partial:
-            self.check_fields(['courier_type', 'regions', 'working_hours'])
-            super(CourierSerializer, self).is_valid(raise_exception=True)
+
+        if self.partial and len(self.initial_data) == 3:
+            self.check_fields(['courier_id', 'order_id', 'complete_time'])
+            super(OrderSerializer, self).is_valid(raise_exception=True)
             return True
-            """
+
         super(OrderSerializer, self).is_valid(raise_exception=True)
         self.check_fields(['weight', 'order_id', 'region', 'delivery_hours'])
         if self.initial_data['order_id'] <= 0:
             raise ValidationError('Order id is less that 0')
-        if not 0.01 <= self.initial_data['weight'] <= 50 or not self.correct_integer(str(self.validated_data['weight'])):
+        if not 0.01 <= self.initial_data['weight'] <= 50 or not self.correct_integer(
+                str(self.validated_data['weight'])):
             raise ValidationError(
                 'Weight is not in a correct number gap(from 0.01 to 50) and only two digits after point')
         for key in ['weight', 'order_id', 'region', 'delivery_hours']:
@@ -127,6 +141,9 @@ class OrderSerializer(serializers.ModelSerializer):
                     element.split('-')[1])):
                 raise ValidationError('One of working hours is not in a correct format')
         return True
+
+    def validate_complete_time(self,time):
+        return time
 
     def check_fields(self, appropriate_field):
         """
