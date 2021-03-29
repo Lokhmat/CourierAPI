@@ -123,61 +123,73 @@ def validated_assign_couriers(json):
                order.delivery_hours):
             suitable_orders.append(order)
     current_payload = sum(order.weight for order in Order.objects.filter(assigned_to=courier).filter(done=False))
-    # Here we should pack backpack like in knapsack problem however the dynamic programming method here will not
-    # work cause it works only with integer weights so in order not to have exponential
-    # time of algorithm(packing by brute force)
-    # let's pack it just by Greedy algo
+    # Here we should pack backpack like in knapsack problem
     answer = {
         'orders': [],
         'assign_time': ''
     }
     timestamp = timezone.now().isoformat()
+    items = []
     for order in suitable_orders:
-        if courier.courier_type == 'foot' and current_payload + order.weight <= 10 and order.assigned_to is None:
-            order.assign_time = timestamp
-            order.assigned_to = courier
-            order.save()
-            answer['orders'].append({'id': order.order_id})
-        elif courier.courier_type == 'bike' and current_payload + order.weight <= 15 and order.assigned_to is None:
-            order.assign_time = timestamp
-            order.assigned_to = courier
-            order.save()
-            answer['orders'].append({'id': order.order_id})
-        elif courier.courier_type == 'car' and current_payload + order.weight <= 50 and order.assigned_to is None:
-            order.assign_time = timestamp
-            order.assigned_to = courier
-            order.save()
-            answer['orders'].append({'id': order.order_id})
+        order.weight = int(order.weight * 100)
+        items.append(order)
+    if courier.courier_type == 'foot':
+        suitable = knapsack(10 * 100 - int(current_payload * 100), items)
+        for order in suitable:
+            if order.assigned_to is None:
+                order.weight = round(order.weight / 100, 2)
+                order.assign_time = timestamp
+                order.assigned_to = courier
+                order.save()
+                answer['orders'].append({'id': order.order_id})
+    elif courier.courier_type == 'bike':
+        suitable = knapsack(15 * 100 - int(current_payload * 100), items)
+        for order in suitable:
+            if order.assigned_to is None:
+                order.weight = round(order.weight / 100, 2)
+                order.assign_time = timestamp
+                order.assigned_to = courier
+                order.save()
+                answer['orders'].append({'id': order.order_id})
+    elif courier.courier_type == 'car':
+        suitable = knapsack(50 * 100 - int(current_payload * 100), items)
+        for order in suitable:
+            if order.assigned_to is None:
+                order.weight = round(order.weight / 100, 2)
+                order.assign_time = timestamp
+                order.assigned_to = courier
+                order.save()
+                answer['orders'].append({'id': order.order_id})
     return answer, timestamp
 
 
 def knapsack(space, items):
     """
-    Probably we could scale algo to work with float by multiplication by 100 every number. But right now i can't figure
-    out how
+    Probably we could scale algo to work with float by multiplication by 100 every number.
     """
     w = [item.weight for item in items]
-    matrix = [[0 for i in range(space)]] * len(items)
-
-    for k in range(1, len(items)):
-        for s in range(1, space):
-            if s >= w[k]:
-                matrix[k][s] = max(matrix[k - 1][s], matrix[k - 1][s - w[k]] + items[k].weight)
+    matrix = [[0 for _ in range(space + 1)] for _ in range(len(w) + 1)]
+    for k in range(len(items) + 1):
+        for s in range(space + 1):
+            if k == 0 or s == 0:
+                matrix[k][s] = 0
+            elif s >= w[k - 1]:
+                matrix[k][s] = max(matrix[k - 1][s], matrix[k - 1][s - w[k - 1]] + w[k - 1])
             else:
                 matrix[k][s] = matrix[k - 1][s]
     take_orders = []
 
-    def find_orders(k, s):
-        if matrix[k][s] == 0:
+    def find_orders(absciss, ordin):
+        if matrix[absciss][ordin] == 0:
             return
-        print(k - 1, s)
-        if matrix[k - 1][s] == matrix[k][s]:
-            find_orders(k - 1, s)
+        if matrix[absciss - 1][ordin] == matrix[absciss][ordin]:
+            find_orders(absciss - 1, ordin)
         else:
-            find_orders(k - 1, s - w[k])
-            take_orders.append(items[k])
+            find_orders(absciss - 1, ordin - w[absciss - 1])
+            take_orders.append(items[absciss - 1])
 
-    find_orders(len(items) - 1, space - 1)
+    find_orders(len(items), space)
+    return take_orders
 
 
 def complete_order(request):
